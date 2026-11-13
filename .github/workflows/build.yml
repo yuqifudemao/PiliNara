@@ -136,21 +136,28 @@ jobs:
             mv "$file" "PiliNara_android_${{ env.version }}_${abi}.apk"
           done
 
-      - name: Verify Android release signatures
+      - name: Sign and verify Android release APKs
         if: github.event_name == 'workflow_dispatch'
         env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           ANDROID_SIGNING_SHA256: ${{ vars.ANDROID_SIGNING_SHA256 }}
         shell: bash
         run: |
           apksigner=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
           test -x "$apksigner"
           for apk in PiliNara_android_*.apk; do
-            certificates=$("$apksigner" verify --print-certs "$apk")
+            "$apksigner" sign --ks android/app/key.jks --ks-type PKCS12 \
+              --ks-key-alias "$KEY_ALIAS" --ks-pass env:KEYSTORE_PASSWORD \
+              --key-pass env:KEY_PASSWORD --out "$apk.signed" "$apk"
+            certificates=$("$apksigner" verify --print-certs "$apk.signed")
             fingerprint=$(awk '/^Signer #[0-9]+ certificate SHA-256 digest:/ {print tolower($NF)}' <<< "$certificates")
             if [[ "$fingerprint" != "${ANDROID_SIGNING_SHA256,,}" ]]; then
               echo "::error::Unexpected signing certificate for $apk"
               exit 1
             fi
+            mv "$apk.signed" "$apk"
           done
 
       - name: Release
