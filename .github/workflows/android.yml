@@ -107,7 +107,7 @@ jobs:
               shell: bash
 
             - name: Release
-              if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '' }}
+              if: ${{ github.repository != 'yuqifudemao/PiliNara' && github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '' }}
               uses: softprops/action-gh-release@v3
               with:
                   tag_name: ${{ github.event.inputs.tag }}
