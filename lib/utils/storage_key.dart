@@ -216,6 +216,7 @@ abstract final class SettingBoxKey {
       showRefreshFAB = 'showRefreshFAB';
 
   static const String enableAiChat = 'enableAiChat',
+      aiApiProfiles = 'aiApiProfiles',
       aiApiUrl = 'aiApiUrl',
       aiApiKey = 'aiApiKey',
       aiModel = 'aiModel',

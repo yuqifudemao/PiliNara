@@ -62,7 +62,84 @@ class AiSettingPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('API 配置', style: theme.textTheme.titleMedium),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text('API 配置', style: theme.textTheme.titleMedium),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _showProfileName(context, controller),
+                        icon: const Icon(Icons.add),
+                        label: const Text('新增'),
+                      ),
+                    ],
+                  ),
+                  Obx(() {
+                    final active = controller.activeProfile.value;
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButton<int>(
+                            isExpanded: true,
+                            value: active,
+                            items: [
+                              for (final (index, profile)
+                                  in controller.profiles.indexed)
+                                DropdownMenuItem(
+                                  value: index,
+                                  child: Text(
+                                    profile['name'] ?? 'API 配置',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                            ],
+                            onChanged: (index) {
+                              if (index != null && index != active) {
+                                controller.selectProfile(index);
+                              }
+                            },
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: '重命名配置',
+                          onPressed: () => _showProfileName(
+                            context,
+                            controller,
+                            currentName: controller.profiles[active]['name'],
+                          ),
+                          icon: const Icon(Icons.edit_outlined),
+                        ),
+                        IconButton(
+                          tooltip: '删除配置',
+                          onPressed: controller.profiles.length > 1
+                              ? () async {
+                                  final confirmed = await showDialog<bool>(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: const Text('删除当前 API 配置？'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context),
+                                          child: const Text('取消'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(context, true),
+                                          child: const Text('删除'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (context.mounted && confirmed == true) {
+                                    controller.deleteProfile();
+                                  }
+                                }
+                              : null,
+                          icon: const Icon(Icons.delete_outline),
+                        ),
+                      ],
+                    );
+                  }),
                   const SizedBox(height: 12),
                   TextField(
                     controller: controller.apiUrlCtl,
@@ -79,7 +156,12 @@ class AiSettingPage extends StatelessWidget {
                     onChanged: controller.saveApiUrl,
                   ),
                   const SizedBox(height: 12),
-                  _ApiKeyField(controller: controller),
+                  Obx(
+                    () => _ApiKeyField(
+                      key: ValueKey(controller.activeProfile.value),
+                      controller: controller,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -358,6 +440,45 @@ class AiSettingPage extends StatelessWidget {
     );
   }
 
+  Future<void> _showProfileName(
+    BuildContext context,
+    AiSettingController controller, {
+    String? currentName,
+  }) async {
+    var name = currentName ?? '';
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(currentName == null ? '新增 API 配置' : '重命名 API 配置'),
+        content: TextFormField(
+          initialValue: name,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: '配置名称'),
+          onChanged: (value) => name = value,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              final trimmed = name.trim();
+              if (trimmed.isNotEmpty) Navigator.pop(context, trimmed);
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted || result == null) return;
+    if (currentName == null) {
+      controller.addProfile(result);
+    } else {
+      controller.renameProfile(result);
+    }
+  }
+
   // 模型选择
   /// M3 exposed dropdown：filled 容器 + 下拉箭头做触发器，
   /// 弹出列表复用外观-字体设置同款 MD3E 菜单（16dp 容器圆角、40dp 行高、
@@ -605,7 +726,7 @@ class AiSettingPage extends StatelessWidget {
 }
 
 class _ApiKeyField extends StatefulWidget {
-  const _ApiKeyField({required this.controller});
+  const _ApiKeyField({super.key, required this.controller});
   final AiSettingController controller;
 
   @override

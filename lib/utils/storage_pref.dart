@@ -1667,42 +1667,68 @@ abstract final class Pref {
 
   static set enableAiChat(bool value) =>
       _setting.put(SettingBoxKey.enableAiChat, value);
-  static String get aiApiUrl =>
-      _setting.get(SettingBoxKey.aiApiUrl, defaultValue: '');
-
-  static set aiApiUrl(String value) =>
-      _setting.put(SettingBoxKey.aiApiUrl, value);
-
-  static String get aiApiKey =>
-      _setting.get(SettingBoxKey.aiApiKey, defaultValue: '');
-
-  static set aiApiKey(String value) =>
-      _setting.put(SettingBoxKey.aiApiKey, value);
-
-  static String get aiModel =>
-      _setting.get(SettingBoxKey.aiModel, defaultValue: '');
-
-  static set aiModel(String value) =>
-      _setting.put(SettingBoxKey.aiModel, value);
-
-  static List<String> get aiModelListCache {
-    final raw = _setting.get(SettingBoxKey.aiModelListCache, defaultValue: '');
-    if (raw.isEmpty) return [];
+  static Map<String, dynamic>? get _aiApiProfileState {
+    final raw = _setting.get(SettingBoxKey.aiApiProfiles);
+    if (raw is! String) return null;
     try {
-      return (jsonDecode(raw) as List).cast<String>();
-    } catch (_) {
-      return [];
+      final state = jsonDecode(raw);
+      if (state is! Map<String, dynamic>) return null;
+      final profiles = state['profiles'];
+      final active = state['active'];
+      if (profiles is! List ||
+          active is! int ||
+          active < 0 ||
+          active >= profiles.length ||
+          profiles.any(
+            (profile) =>
+                profile is! Map<String, dynamic> ||
+                profile['name'] is! String ||
+                profile.values.any((value) => value is! String),
+          )) {
+        return null;
+      }
+      return state;
+    } on FormatException {
+      return null;
     }
   }
 
-  static set aiModelListCache(List<String> value) =>
-      _setting.put(SettingBoxKey.aiModelListCache, jsonEncode(value));
+  static List<Map<String, String>> get aiApiProfiles {
+    final state = _aiApiProfileState;
+    if (state != null) {
+      return (state['profiles'] as List)
+          .map((profile) => Map<String, String>.from(profile as Map))
+          .toList();
+    }
+    return [
+      {
+        'name': '默认配置',
+        'url': _setting.get(SettingBoxKey.aiApiUrl, defaultValue: ''),
+        'key': _setting.get(SettingBoxKey.aiApiKey, defaultValue: ''),
+        'model': _setting.get(SettingBoxKey.aiModel, defaultValue: ''),
+        'effort': _setting.get(
+          SettingBoxKey.aiReasoningEffort,
+          defaultValue: 'default',
+        ),
+      },
+    ];
+  }
 
-  static int get aiModelListCacheTime =>
-      _setting.get(SettingBoxKey.aiModelListCacheTime, defaultValue: 0);
+  static int get activeAiApiProfile => _aiApiProfileState?['active'] as int? ?? 0;
 
-  static set aiModelListCacheTime(int value) =>
-      _setting.put(SettingBoxKey.aiModelListCacheTime, value);
+  static void saveAiApiProfiles(List<Map<String, String>> profiles, int active) {
+    _setting.put(
+      SettingBoxKey.aiApiProfiles,
+      jsonEncode({'profiles': profiles, 'active': active}),
+    );
+  }
+
+  static Map<String, String> get _activeAiApiProfile =>
+      aiApiProfiles[activeAiApiProfile];
+
+  static String get aiApiUrl => _activeAiApiProfile['url'] ?? '';
+  static String get aiApiKey => _activeAiApiProfile['key'] ?? '';
+  static String get aiModel => _activeAiApiProfile['model'] ?? '';
 
   static String get aiPromptTemplates =>
       _setting.get(SettingBoxKey.aiPromptTemplates, defaultValue: '');
@@ -1718,13 +1744,9 @@ abstract final class Pref {
 
   /// 思考强度（reasoning_effort）：未干预服务商默认行为时为 'default'。
   static String get aiReasoningEffort {
-    final value =
-        _setting.get(SettingBoxKey.aiReasoningEffort, defaultValue: 'default');
+    final value = _activeAiApiProfile['effort'] ?? 'default';
     return value == 'auto' ? 'default' : value;
   }
-
-  static set aiReasoningEffort(String value) =>
-      _setting.put(SettingBoxKey.aiReasoningEffort, value);
 
   static int get angleDegrees =>
       _setting.get(SettingBoxKey.angleDegrees, defaultValue: 30);

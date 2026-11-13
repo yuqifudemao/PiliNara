@@ -30,8 +30,9 @@ class AiSettingController extends GetxController {
   }
 
   final enableAiChat = true.obs;
-  final apiUrl = ''.obs;
-  final apiKey = ''.obs;
+  final profiles = <Map<String, String>>[].obs;
+  final activeProfile = 0.obs;
+  int _modelRequest = 0;
   final model = ''.obs;
   final aiAutoScroll = true.obs;
   final reasoningEffort = 'default'.obs;
@@ -47,16 +48,14 @@ class AiSettingController extends GetxController {
   void onInit() {
     super.onInit();
     enableAiChat.value = Pref.enableAiChat;
-    apiUrl.value = Pref.aiApiUrl;
-    apiKey.value = Pref.aiApiKey;
-    model.value = Pref.aiModel;
+    profiles.assignAll(Pref.aiApiProfiles);
+    activeProfile.value = Pref.activeAiApiProfile;
     aiAutoScroll.value = Pref.aiAutoScroll;
-    reasoningEffort.value = Pref.aiReasoningEffort;
-    apiUrlCtl = TextEditingController(text: apiUrl.value);
-    apiKeyCtl = TextEditingController(text: apiKey.value);
-    modelCtl = TextEditingController(text: model.value);
+    apiUrlCtl = TextEditingController();
+    apiKeyCtl = TextEditingController();
+    modelCtl = TextEditingController();
+    _loadProfile();
     templates.value = AiChatService.getTemplates();
-    _loadCachedModels();
   }
 
   @override
@@ -67,45 +66,86 @@ class AiSettingController extends GetxController {
     super.onClose();
   }
 
-  void _loadCachedModels() {
-    final cacheTime = Pref.aiModelListCacheTime;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    // Cache valid for 1 day
-    if (now - cacheTime < 86400000) {
-      modelList.value = Pref.aiModelListCache;
-    }
+  void _resetModels() {
+    _modelRequest++;
+    modelList.clear();
+    isLoadingModels.value = false;
+  }
+
+  void _loadProfile() {
+    _resetModels();
+    final profile = profiles[activeProfile.value];
+    apiUrlCtl.text = profile['url'] ?? '';
+    apiKeyCtl.text = profile['key'] ?? '';
+    modelCtl.text = model.value = profile['model'] ?? '';
+    final effort = profile['effort'];
+    reasoningEffort.value = effort == null || effort == 'auto'
+        ? 'default'
+        : effort;
+  }
+
+  void _saveProfiles() => Pref.saveAiApiProfiles(profiles, activeProfile.value);
+
+  void selectProfile(int index) {
+    activeProfile.value = index;
+    _saveProfiles();
+    _loadProfile();
+  }
+
+  void addProfile(String name) {
+    profiles.add({'name': name});
+    selectProfile(profiles.length - 1);
+  }
+
+  void renameProfile(String name) => _saveProfileField('name', name);
+
+  void deleteProfile() {
+    if (profiles.length <= 1) return;
+    profiles.removeAt(activeProfile.value);
+    selectProfile(0);
+  }
+
+  void _saveProfileField(String key, String value) {
+    final index = activeProfile.value;
+    profiles[index] = {...profiles[index], key: value};
+    _saveProfiles();
   }
 
   Future<void> fetchModels() async {
+    final request = ++_modelRequest;
     isLoadingModels.value = true;
     try {
       final models = await AiChatService.fetchModels();
+      if (isClosed || request != _modelRequest) return;
       modelList.value = models;
-      Pref.aiModelListCache = models;
-      Pref.aiModelListCacheTime = DateTime.now().millisecondsSinceEpoch;
       if (models.isEmpty) {
         SmartDialog.showToast('未获取到模型列表，请检查 API 配置');
       }
     } catch (e) {
-      SmartDialog.showToast('获取模型列表失败: $e');
+      if (!isClosed && request == _modelRequest) {
+        SmartDialog.showToast('获取模型列表失败: $e');
+      }
     } finally {
-      isLoadingModels.value = false;
+      if (!isClosed && request == _modelRequest) {
+        isLoadingModels.value = false;
+      }
     }
   }
 
   void saveApiUrl(String value) {
-    apiUrl.value = value;
-    Pref.aiApiUrl = value;
+    _resetModels();
+    _saveProfileField('url', value);
   }
 
   void saveApiKey(String value) {
-    apiKey.value = value;
-    Pref.aiApiKey = value;
+    _resetModels();
+    _saveProfileField('key', value);
   }
 
   void saveModel(String value) {
+    if (modelCtl.text != value) modelCtl.text = value;
     model.value = value;
-    Pref.aiModel = value;
+    _saveProfileField('model', value);
   }
 
   void saveAiAutoScroll(bool value) {
@@ -115,7 +155,7 @@ class AiSettingController extends GetxController {
 
   void saveReasoningEffort(String value) {
     reasoningEffort.value = value;
-    Pref.aiReasoningEffort = value;
+    _saveProfileField('effort', value);
   }
 
   void addTemplate(String name, String prompt) {
