@@ -1,14 +1,17 @@
 <div align="center">
   <img src="assets/images/logo/logo.png" width="96" height="96" alt="PiliNara 图标" />
-  <h1>PiliNara 个人版</h1>
+  <h1>PiliCat</h1>
+  <p>鱼欺负的猫的 B 站客户端</p>
   <p>基于 PiliNara 的第三方哔哩哔哩 Android 客户端，支持保存多套 AI 接口配置，并在视频详情页直接切换模型。</p>
   <p><a href="https://github.com/yuqifudemao/PiliNara/releases/latest"><strong>下载最新版 APK</strong></a> · <a href="https://github.com/yuqifudemao/PiliNara/releases">全部版本</a> · <a href="https://github.com/Starfallan/PiliNara">上游项目</a></p>
 </div>
 
+PiliCat 由「PiliNara 个人版」更名而来。
+
 ## 下载与安装
 
 1. 打开 [Releases](https://github.com/yuqifudemao/PiliNara/releases/latest)，在 **Assets** 中下载文件名以 `arm64-v8a.apk` 结尾的安装包。个人版后续仅发布 Android `arm64-v8a` 安装包。
-2. 安装后，桌面显示为「PiliNara 个人版」。个人版使用独立包名，可与原版 PiliNara 同时安装，两边的登录状态和设置各自保存。
+2. 安装后，桌面显示为「PiliCat」。个人版使用独立包名，可与原版 PiliNara 同时安装，两边的登录状态和设置各自保存。
 
 **升级个人版**
 
