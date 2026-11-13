@@ -46,7 +46,7 @@
             android:name="io.flutter.embedding.android.EnableImpeller"
             android:value="false" />
         <activity
-            android:name=".MainActivity"
+            android:name="com.example.pilinara.MainActivity"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:exported="true"
             android:hardwareAccelerated="true"
@@ -76,7 +76,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <intent-filter android:label="PiliNara">
+            <intent-filter android:label="@string/app_name">
                 <action android:name="android.intent.action.VIEW" />
 
                 <category android:name="android.intent.category.DEFAULT" />
@@ -102,7 +102,7 @@
                 <!--<data android:host="bangumi.bilibili.com"/>-->
                 <!--<data android:host="space.bilibili.com"/>-->
             </intent-filter>
-            <intent-filter android:label="PiliNara">
+            <intent-filter android:label="@string/app_name">
                 <action android:name="android.intent.action.VIEW" />
                 <action android:name="android.intent.action.SEARCH" />
                 <action android:name="com.example.pilinara.SHORTCUT" />
@@ -207,7 +207,7 @@
             </intent-filter>
         </activity>
         <provider
-            android:name=".BiliDocumentsProvider"
+            android:name="com.example.pilinara.BiliDocumentsProvider"
             android:permission="android.permission.MANAGE_DOCUMENTS"
             android:enabled="false"
             android:exported="true"
