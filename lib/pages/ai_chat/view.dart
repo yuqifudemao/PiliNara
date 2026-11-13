@@ -378,6 +378,7 @@ class _AiChatPageState extends State<AiChatPage>
             child: Column(
               key: _promptBarKey,
               children: [
+                _buildModelPicker(),
                 _buildPromptBar(theme),
                 Divider(height: 1, color: colorScheme.outlineVariant),
                 Obx(() {
@@ -454,6 +455,46 @@ class _AiChatPageState extends State<AiChatPage>
       onPointerSignal: _onPointerSignal,
       child: _buildContent(theme),
     );
+  }
+
+  Future<void> _selectModel() async {
+    final profiles = Pref.aiApiProfiles
+        .where((profile) => (profile['url'] ?? '').trim().isNotEmpty)
+        .toList();
+    if (profiles.isEmpty) {
+      SmartDialog.showToast('请先在 AI 视频总结设置中添加 API 配置');
+      return;
+    }
+
+    final selected = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) => _AiModelDialog(
+        profiles: profiles,
+        current: chatCtl.currentProfile,
+      ),
+    );
+    if (mounted && selected != null && !chatCtl.isRequesting.value) {
+      chatCtl.selectedProfile.value = selected;
+    }
+  }
+
+  Widget _buildModelPicker() {
+    return Obx(() {
+      final profile = chatCtl.currentProfile;
+      final model = profile['model'] ?? '';
+      final label = model.isEmpty ? '选择模型' : model;
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: TextButton.icon(
+            onPressed: chatCtl.isRequesting.value ? null : _selectModel,
+            icon: const Icon(Icons.smart_toy_outlined, size: 18),
+            label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      );
+    });
   }
 
   Widget _buildPromptBar(ThemeData theme) {
@@ -1386,6 +1427,142 @@ class _ReasoningBlockState extends State<_ReasoningBlock> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AiModelDialog extends StatefulWidget {
+  const _AiModelDialog({required this.profiles, required this.current});
+
+  final List<Map<String, String>> profiles;
+  final Map<String, String> current;
+
+  @override
+  State<_AiModelDialog> createState() => _AiModelDialogState();
+}
+
+class _AiModelDialogState extends State<_AiModelDialog> {
+  int _profileIndex = 0;
+  late final TextEditingController _modelController;
+  String _model = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final index = widget.profiles.indexWhere(
+      (profile) =>
+          profile['name'] == widget.current['name'] &&
+          profile['url'] == widget.current['url'] &&
+          profile['key'] == widget.current['key'],
+    );
+    _profileIndex = index < 0 ? 0 : index;
+    _model = (index < 0 ? _profile['model'] : widget.current['model']) ?? '';
+    _modelController = TextEditingController(text: _model);
+  }
+
+  @override
+  void dispose() {
+    _modelController.dispose();
+    super.dispose();
+  }
+  List<String> _models = [];
+  bool _loading = false;
+
+  Map<String, String> get _profile => widget.profiles[_profileIndex];
+
+  Future<void> _fetchModels() async {
+    setState(() => _loading = true);
+    try {
+      final models = await AiChatService.fetchModels(profile: _profile);
+      if (!mounted) return;
+      setState(() => _models = models.toSet().toList());
+      if (models.isEmpty) SmartDialog.showToast('未获取到模型，可手动填写');
+    } catch (_) {
+      if (mounted) SmartDialog.showToast('获取模型失败，可手动填写');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('切换 AI 模型'),
+      scrollable: true,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DropdownButton<int>(
+            value: _profileIndex,
+            isExpanded: true,
+            items: [
+              for (final (index, profile) in widget.profiles.indexed)
+                DropdownMenuItem(
+                  value: index,
+                  child: Text(
+                    profile['name'] ?? 'API 配置',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: _loading
+                ? null
+                : (index) {
+                    if (index == null) return;
+                    setState(() {
+                      _profileIndex = index;
+                      _modelController.text = _model = _profile['model'] ?? '';
+                      _models = [];
+                    });
+                  },
+          ),
+          TextFormField(
+            controller: _modelController,
+            decoration: const InputDecoration(labelText: '模型名称'),
+            onChanged: (value) => setState(() => _model = value),
+          ),
+          TextButton(
+            onPressed: _loading ? null : _fetchModels,
+            child: Text(_loading ? '正在获取模型…' : '获取模型列表'),
+          ),
+          if (_models.isNotEmpty)
+            DropdownButton<String>(
+              isExpanded: true,
+              value: _models.contains(_model) ? _model : null,
+              hint: const Text('从列表选择模型'),
+              items: [
+                for (final model in _models)
+                  DropdownMenuItem(
+                    value: model,
+                    child: Text(model, overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: (model) {
+                if (model == null) return;
+                setState(() {
+                  _modelController.text = _model = model;
+                });
+              },
+            ),
+          const Text('仅用于当前视频的后续分析和追问。'),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _model.trim().isEmpty || _loading
+              ? null
+              : () => Navigator.pop(context, {
+                  ..._profile,
+                  'model': _model.trim(),
+                }),
+          child: const Text('切换'),
+        ),
+      ],
     );
   }
 }

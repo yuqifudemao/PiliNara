@@ -118,8 +118,7 @@ class _ThinkTagParser {
 }
 
 class AiChatService {
-  static Options _options({Duration? receiveTimeout}) {
-    final apiKey = Pref.aiApiKey;
+  static Options _options(String apiKey, {Duration? receiveTimeout}) {
     return Options(
       headers: {
         'Content-Type': 'application/json',
@@ -131,8 +130,8 @@ class AiChatService {
 
   /// 版本路径由用户填写，不自动拼接（各服务商版本段不同：
   /// /v1、/v1beta/openai、/api/v3 等），仅补全 /models、/chat/completions
-  static String _baseUrl() {
-    var url = Pref.aiApiUrl.trimRight();
+  static String _baseUrl(String apiUrl) {
+    var url = apiUrl.trimRight();
     while (url.endsWith('/')) {
       url = url.substring(0, url.length - 1);
     }
@@ -213,15 +212,16 @@ class AiChatService {
   }
 
   /// Fetch model list from {base}/models
-  static Future<List<String>> fetchModels() async {
-    final baseUrl = _baseUrl();
+  static Future<List<String>> fetchModels({Map<String, String>? profile}) async {
+    final baseUrl = _baseUrl(profile == null ? Pref.aiApiUrl : profile['url'] ?? '');
+    final apiKey = profile == null ? Pref.aiApiKey : profile['key'] ?? '';
     if (baseUrl.isEmpty) throw Exception('请先配置 API 地址');
     final url = '$baseUrl/models';
     final Response res;
     try {
       res = await Dio().get(
         url,
-        options: _options(receiveTimeout: const Duration(seconds: 30)),
+        options: _options(apiKey, receiveTimeout: const Duration(seconds: 30)),
       );
     } on DioException catch (e) {
       throw await _requestError(url, e);
@@ -250,14 +250,16 @@ class AiChatService {
     required CancelToken cancelToken,
     String? model,
     String? reasoningEffort,
+    Map<String, String>? profile,
   }) async* {
-    final baseUrl = _baseUrl();
+    final baseUrl = _baseUrl(profile == null ? Pref.aiApiUrl : profile['url'] ?? '');
+    final apiKey = profile == null ? Pref.aiApiKey : profile['key'] ?? '';
     if (baseUrl.isEmpty) throw Exception('请先配置 API 地址');
     final useModel = model ?? Pref.aiModel;
     if (useModel.isEmpty) throw Exception('请先选择模型');
 
     final url = '$baseUrl/chat/completions';
-    final opts = _options(receiveTimeout: const Duration(minutes: 10))
+    final opts = _options(apiKey, receiveTimeout: const Duration(minutes: 10))
       ..responseType = ResponseType.stream;
     final dio = Dio();
     try {

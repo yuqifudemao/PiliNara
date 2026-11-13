@@ -15,6 +15,10 @@ class AiChatController extends GetxController {
   final isRequesting = false.obs;
   final subtitleWarning = false.obs;
   final hasVideoContext = false.obs;
+  final selectedProfile = Rxn<Map<String, String>>();
+
+  Map<String, String> get currentProfile =>
+      selectedProfile.value ?? Pref.aiApiProfiles[Pref.activeAiApiProfile];
 
   final String heroTag;
   late final VideoDetailController _videoCtl;
@@ -165,6 +169,7 @@ class AiChatController extends GetxController {
     required String errorPrefix,
   }) async {
     if (_requestToken != null || isClosed) return;
+    final profile = currentProfile;
     final token = CancelToken();
     _requestToken = token;
     isRequesting.value = true;
@@ -188,7 +193,7 @@ class AiChatController extends GetxController {
         response,
       ]);
 
-      await _streamResponse(token, response);
+      await _streamResponse(token, response, profile);
     } catch (e) {
       if (_isCurrentRequest(token)) {
         removeEmpty = true;
@@ -226,7 +231,11 @@ class AiChatController extends GetxController {
     isRequesting.value = false;
   }
 
-  Future<void> _streamResponse(CancelToken token, ChatMessage response) async {
+  Future<void> _streamResponse(
+    CancelToken token,
+    ChatMessage response,
+    Map<String, String> profile,
+  ) async {
     subtitleWarning.value = false;
 
     final chatMessages = <Map<String, String>>[
@@ -259,7 +268,9 @@ class AiChatController extends GetxController {
 
     await for (final delta in AiChatService.streamChat(
       messages: chatMessages,
-      reasoningEffort: Pref.aiReasoningEffort,
+      profile: profile,
+      model: profile['model'] ?? '',
+      reasoningEffort: profile['effort'],
       cancelToken: token,
     )) {
       if (!_isCurrentRequest(token)) return;
