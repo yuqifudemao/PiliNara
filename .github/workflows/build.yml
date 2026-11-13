@@ -83,16 +83,38 @@ jobs:
         run: lib/scripts/patch.ps1 android
         continue-on-error: true
 
-      - name: Write key
+      - name: Load persistent Android signing key
         if: github.event_name == 'workflow_dispatch'
+        env:
+          SIGN_KEYSTORE_BASE64: ${{ secrets.SIGN_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ANDROID_SIGNING_SHA256: ${{ vars.ANDROID_SIGNING_SHA256 }}
+        shell: bash
         run: |
-          if [ ! -z "${{ secrets.SIGN_KEYSTORE_BASE64 }}" ]; then
-            echo "${{ secrets.SIGN_KEYSTORE_BASE64 }}" | base64 --decode > android/app/key.jks
-            echo storeFile='key.jks' >> android/key.properties
-            echo storePassword='${{ secrets.KEYSTORE_PASSWORD }}' >> android/key.properties
-            echo keyAlias='${{ secrets.KEY_ALIAS }}' >> android/key.properties
-            echo keyPassword='${{ secrets.KEY_PASSWORD }}' >> android/key.properties
+          for name in SIGN_KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD ANDROID_SIGNING_SHA256; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing Android signing configuration: $name"
+              exit 1
+            fi
+          done
+          if [[ ! "$ANDROID_SIGNING_SHA256" =~ ^[0-9a-fA-F]{64}$ ]]; then
+            echo "::error::ANDROID_SIGNING_SHA256 must be a SHA-256 fingerprint without colons"
+            exit 1
           fi
+          umask 077
+          printf '%s' "$SIGN_KEYSTORE_BASE64" | base64 --decode > android/app/key.jks
+          escape_property() {
+            local value="${1//\\/\\\\}"
+            printf '%s' "${value// /\\ }"
+          }
+          {
+            printf 'storeFile=key.jks\n'
+            printf 'storePassword=%s\n' "$(escape_property "$KEYSTORE_PASSWORD")"
+            printf 'keyAlias=%s\n' "$(escape_property "$KEY_ALIAS")"
+            printf 'keyPassword=%s\n' "$(escape_property "$KEY_PASSWORD")"
+          } > android/key.properties
 
       - name: Set and Extract version
         shell: pwsh
@@ -112,6 +134,23 @@ jobs:
           for file in build/app/outputs/flutter-apk/app-*-release.apk; do
             abi=$(echo "$file" | sed -E 's|.*app-(.*)-release\.apk|\1|')
             mv "$file" "PiliNara_android_${{ env.version }}_${abi}.apk"
+          done
+
+      - name: Verify Android release signatures
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          ANDROID_SIGNING_SHA256: ${{ vars.ANDROID_SIGNING_SHA256 }}
+        shell: bash
+        run: |
+          apksigner=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          test -x "$apksigner"
+          for apk in PiliNara_android_*.apk; do
+            certificates=$("$apksigner" verify --print-certs "$apk")
+            fingerprint=$(awk '/^Signer #[0-9]+ certificate SHA-256 digest:/ {print tolower($NF)}' <<< "$certificates")
+            if [[ "$fingerprint" != "${ANDROID_SIGNING_SHA256,,}" ]]; then
+              echo "::error::Unexpected signing certificate for $apk"
+              exit 1
+            fi
           done
 
       - name: Release
